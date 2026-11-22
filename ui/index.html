@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Graph-RAG Assistant</title>
+    <!-- Google Fonts: Outfit and Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Main Style Sheet -->
+    <link rel="stylesheet" href="style.css?v=2.5.0">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <div class="brand">
+                    <span class="brand-icon"><i class="fa-solid fa-network-wired"></i></span>
+                    <span class="brand-name">Universal<span>RAG</span></span>
+                </div>
+                <button class="sidebar-close-btn" id="btn-sidebar-close" aria-label="Close Sidebar">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+
+            <!-- Tab Navigation in Sidebar -->
+            <nav class="sidebar-nav">
+                <button class="nav-tab-btn active" id="tab-btn-chat" data-tab="chat">
+                    <i class="fa-solid fa-comments"></i>
+                    <span>Chat Assistant</span>
+                </button>
+                <button class="nav-tab-btn" id="tab-btn-docs" data-tab="docs">
+                    <i class="fa-solid fa-folder-tree"></i>
+                    <span>Documents & Graph</span>
+                    <span class="nav-badge" id="nav-queue-badge" style="display: none;">0</span>
+                </button>
+            </nav>
+
+            <div class="sidebar-section">
+                <h3><i class="fa-solid fa-signal"></i> System Status</h3>
+                <div class="status-card">
+                    <div class="status-item" id="status-api">
+                        <span class="status-indicator offline"></span>
+                        <span class="status-label">Backend API: Connecting...</span>
+                    </div>
+                    <div class="status-item" id="status-neo4j">
+                        <span class="status-indicator offline"></span>
+                        <span class="status-label">Neo4j Database: Offline</span>
+                    </div>
+                    <div class="model-badge">
+                        <i class="fa-solid fa-microchip"></i> <span id="active-model">Loading...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-section scrollable" id="sidebar-suggestions-section">
+                <h3><i class="fa-solid fa-compass"></i> Example Queries</h3>
+                <div class="suggestions-list">
+                    <button class="suggest-btn" data-query="Summarize the main conclusions and key findings across all documents.">
+                        <i class="fa-solid fa-circle-question"></i> Key Findings Summary
+                    </button>
+                    <button class="suggest-btn" data-query="What quantitative data, metrics, or financial tables are mentioned?">
+                        <i class="fa-solid fa-circle-question"></i> Data & Metrics Overview
+                    </button>
+                    <button class="suggest-btn" data-query="List all section headings and structural topics covered.">
+                        <i class="fa-solid fa-circle-question"></i> Topics & Structure
+                    </button>
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <button class="clear-btn" id="btn-clear-chat">
+                    <i class="fa-solid fa-trash-can"></i> Clear Conversation
+                </button>
+                <div class="footer-note">
+                    <p>Powered by Neo4j & LlamaIndex</p>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Workspace Area -->
+        <main class="chat-area">
+            <!-- Liquid Animation Canvas Background -->
+            <canvas class="liquid-bg" id="liquid-bg-canvas"></canvas>
+
+            <header class="chat-header">
+                <button class="menu-toggle-btn" id="btn-menu-toggle" aria-label="Toggle Sidebar">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+                <div class="chat-title-info">
+                    <h2 id="main-header-title">Universal Knowledge Graph Agent</h2>
+                    <p id="main-header-subtitle">Hybrid Vector + Full-Text Search with Graph-Based Context Expansion</p>
+                </div>
+                <div class="header-tab-switch">
+                    <button class="header-tab-btn active" id="header-tab-chat" data-tab="chat">
+                        <i class="fa-solid fa-comments"></i> <span>Chat</span>
+                    </button>
+                    <button class="header-tab-btn" id="header-tab-docs" data-tab="docs">
+                        <i class="fa-solid fa-folder-tree"></i> <span>Documents</span>
+                        <span class="header-queue-dot" id="header-queue-dot" style="display: none;"></span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- ================= VIEW 1: CHAT TAB ================= -->
+            <div class="view-panel active" id="view-chat">
+                <!-- Chat Message Feed -->
+                <div class="chat-feed" id="chat-messages">
+                    <!-- Welcome Card -->
+                    <div class="welcome-card" id="welcome-message">
+                        <div class="welcome-icon">
+                            <i class="fa-solid fa-brain"></i>
+                        </div>
+                        <h2>Welcome to Universal Graph-RAG!</h2>
+                        <p>I am your intelligent document assistant connected to your Neo4j Knowledge Graph. Ask me anything about your uploaded documents, tables, reports, or data.</p>
+                        <div class="suggestion-grid">
+                            <div class="suggestion-card" data-query="Summarize the key takeaways and topics in the indexed documents.">
+                                <h4>Comprehensive Summary</h4>
+                                <p>Get a high-level overview of key conclusions and subjects.</p>
+                            </div>
+                            <div class="suggestion-card" data-query="Extract all quantitative tables and metrics from the documents.">
+                                <h4>Table & Metrics Extraction</h4>
+                                <p>Extract specific figures, comparisons, and tabular data.</p>
+                            </div>
+                        </div>
+                        <div class="welcome-action-box">
+                            <button type="button" class="welcome-action-btn" id="btn-welcome-docs">
+                                <i class="fa-solid fa-folder-tree"></i>
+                                <span>Open Documents Tab & Upload Files</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Source Document Preview Drawer -->
+                <div class="sources-drawer" id="sources-container" style="display: none;">
+                    <div class="drawer-header">
+                        <h4><i class="fa-solid fa-book-open"></i> Retrieved Source Contexts (<span id="source-count">0</span>)</h4>
+                        <button class="toggle-drawer-btn" id="btn-toggle-sources">
+                            <i class="fa-solid fa-chevron-down"></i>
+                        </button>
+                    </div>
+                    <div class="sources-list" id="sources-list">
+                        <!-- Source items dynamically rendered -->
+                    </div>
+                </div>
+
+                <!-- Input Form Block -->
+                <footer class="chat-footer">
+                    <form id="chat-form" class="input-container">
+                        <textarea 
+                            id="user-input" 
+                            placeholder="Ask anything about your documents... (e.g., summarize key points or compare figures)" 
+                            rows="1" 
+                            required
+                        ></textarea>
+                        <button type="submit" id="btn-send" class="send-btn" title="Send Query">
+                            <i class="fa-solid fa-paper-plane"></i>
+                        </button>
+                    </form>
+                </footer>
+            </div>
+
+            <!-- ================= VIEW 2: DOCUMENTS TAB ================= -->
+            <div class="view-panel" id="view-docs" style="display: none;">
+                <div class="docs-workspace">
+                    <!-- Top Action / Stat Banner -->
+                    <div class="docs-banner">
+                        <div class="docs-banner-info">
+                            <h3><i class="fa-solid fa-diagram-project"></i> Knowledge Graph Documents</h3>
+                            <p>Upload documents into your Neo4j Knowledge Graph. The dedicated background worker processes <strong>1 document at a time</strong> so ongoing chat prompts are never interrupted.</p>
+                        </div>
+                        <div class="docs-banner-stats">
+                            <div class="stat-pill">
+                                <span class="stat-num" id="stat-total-docs">0</span>
+                                <span class="stat-lbl">Documents</span>
+                            </div>
+                            <div class="stat-pill">
+                                <span class="stat-num" id="stat-total-chunks">0</span>
+                                <span class="stat-lbl">Graph Chunks</span>
+                            </div>
+                        </div>
+                        
+                        <div class="welcome-action-box">
+                            <button type="button" class="welcome-action-btn" id="btn-welcome-docs">
+                                <i class="fa-solid fa-folder-tree"></i>
+                                <span>Open Documents Tab & Upload Files</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="docs-grid">
+                        <!-- Left Column: Upload Box -->
+                        <div class="docs-card upload-card">
+                            <div class="card-header">
+                                <h4><i class="fa-solid fa-cloud-arrow-up"></i> Upload Documents & Images</h4>
+                            </div>
+                            
+                            <form id="document-upload-form" class="upload-form">
+                                <!-- Drag & Drop Zone -->
+                                <div class="dropzone" id="file-dropzone">
+                                    <input type="file" id="file-input" accept=".pdf,.md,.markdown,.txt,.jpeg,.jpg,.png,.webp" style="display: none;">
+                                    <div class="dropzone-content">
+                                        <div class="dropzone-icon">
+                                            <i class="fa-solid fa-file-arrow-up"></i>
+                                        </div>
+                                        <p class="dropzone-text">Drag & drop your document here, or <span class="browse-link" id="btn-browse-file">browse</span></p>
+                                        <p class="dropzone-hint">Supports PDF, Markdown (.md), Text (.txt), and Images (JPEG, PNG)</p>
+                                    </div>
+                                    <div class="selected-file-preview" id="selected-file-preview" style="display: none;">
+                                        <img id="preview-image-thumb" class="file-thumb-preview" style="display: none;" alt="Preview">
+                                        <i class="fa-solid fa-file-lines file-icon" id="preview-file-icon"></i>
+                                        <div class="file-meta">
+                                            <span class="file-name" id="preview-filename">document.pdf</span>
+                                            <span class="file-size" id="preview-filesize">2.4 MB</span>
+                                        </div>
+                                        <button type="button" class="btn-remove-file" id="btn-remove-file" title="Remove file">
+                                            <i class="fa-solid fa-xmark"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Category Selection -->
+                                <div class="form-group">
+                                    <label for="category-input"><i class="fa-solid fa-tags"></i> Category / Topic</label>
+                                    <input type="text" id="category-input" placeholder="e.g., Reports, Finance, Policies, Specifications" value="General">
+                                    <div class="category-tags">
+                                        <span class="cat-tag" data-cat="General">General</span>
+                                        <span class="cat-tag" data-cat="Reports">Reports</span>
+                                        <span class="cat-tag" data-cat="Finance">Finance</span>
+                                        <span class="cat-tag" data-cat="Policies">Policies</span>
+                                        <span class="cat-tag" data-cat="Technical">Technical</span>
+                                    </div>
+                                </div>
+
+                                <button type="submit" id="btn-upload-submit" class="submit-upload-btn" disabled>
+                                    <i class="fa-solid fa-plus-circle"></i> Add to Ingestion Queue
+                                </button>
+                            </form>
+
+                            <div class="upload-alert" id="upload-alert" style="display: none;"></div>
+                        </div>
+
+                        <!-- Right Column: Live Worker & Queue Status -->
+                        <div class="docs-card worker-card">
+                            <div class="card-header">
+                                <h4><i class="fa-solid fa-gears"></i> Ingestion Worker & Queue</h4>
+                                <div class="worker-badges">
+                                    <span class="device-pill cuda" id="worker-device-pill">
+                                        <i class="fa-solid fa-bolt"></i> <span id="worker-device-name">CUDA Active</span>
+                                    </span>
+                                    <span class="concurrency-pill">
+                                    <span class="worker-pulse" id="worker-pulse"></span>
+                                    Concurrency Limit: 1
+                                </span>
+                                </div>
+                            </div>
+
+                            <!-- Active Ingestion Task Block -->
+                            <div class="active-task-container" id="active-task-container">
+                                <div class="worker-idle" id="worker-idle-view">
+                                    <i class="fa-solid fa-circle-check idle-icon"></i>
+                                    <h5>Worker Idle</h5>
+                                    <p>Ready to process documents. Concurrency is limited to 1 at a time; others queue automatically.</p>
+                                </div>
+
+                                <div class="worker-processing" id="worker-processing-view" style="display: none;">
+                                    <div class="processing-top">
+                                        <div class="processing-file">
+                                            <span class="spinner-inline"><i class="fa-solid fa-spinner fa-spin"></i></span>
+                                            <strong id="active-doc-name">Annual_Report.pdf</strong>
+                                            <span class="category-badge" id="active-doc-category">Finance</span>
+                                        </div>
+                                        <span class="status-percent" id="active-doc-percent">40%</span>
+                                    </div>
+
+                                    <!-- Progress Stage Pills -->
+                                    <div class="stage-stepper">
+                                        <div class="step-item" id="step-converting">
+                                            <span class="step-dot"></span>
+                                            <span class="step-title">Convert</span>
+                                        </div>
+                                        <div class="step-item" id="step-chunking">
+                                            <span class="step-dot"></span>
+                                            <span class="step-title">Chunk & Table</span>
+                                        </div>
+                                        <div class="step-item" id="step-embedding">
+                                            <span class="step-dot"></span>
+                                            <span class="step-title">Embed</span>
+                                        </div>
+                                        <div class="step-item" id="step-indexing">
+                                            <span class="step-dot"></span>
+                                            <span class="step-title">Graph Index</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- Progress Bar -->
+                                    <div class="progress-bar-track">
+                                        <div class="progress-bar-fill" id="active-progress-bar" style="width: 40%;"></div>
+                                    </div>
+                                    <p class="processing-msg" id="active-status-message">Parsing document...</p>
+                                </div>
+                            </div>
+
+                            <!-- Waiting Queue Container -->
+                            <div class="queue-section">
+                                <div class="queue-header">
+                                    <h5><i class="fa-solid fa-list-ol"></i> Waiting Queue (<span id="queue-count-display">0</span>)</h5>
+                                    <span class="queue-note">Processed sequentially</span>
+                                </div>
+                                <div class="queue-list" id="queue-list">
+                                    <div class="queue-empty">Queue is empty</div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="welcome-action-box">
+                            <button type="button" class="welcome-action-btn" id="btn-welcome-docs">
+                                <i class="fa-solid fa-folder-tree"></i>
+                                <span>Open Documents Tab & Upload Files</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Bottom Section: Indexed Knowledge Base Table -->
+                    <div class="docs-card library-card">
+                        <div class="card-header library-header">
+                            <div>
+                                <h4><i class="fa-solid fa-database"></i> Indexed Knowledge Base</h4>
+                                <p class="card-subtitle">Documents currently stored as nodes & chunks in Neo4j.</p>
+                            </div>
+                            <div class="library-actions">
+                                <div class="search-input-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input type="text" id="filter-docs-input" placeholder="Filter indexed documents...">
+                                </div>
+                                <button class="btn-secondary" id="btn-refresh-library" title="Refresh library">
+                                    <i class="fa-solid fa-arrows-rotate"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="docs-table" id="docs-table">
+                                <thead>
+                                    <tr>
+                                        <th>Document Name</th>
+                                        <th>Category</th>
+                                        <th>Graph Chunks</th>
+                                        <th>Status</th>
+                                        <th style="text-align: right;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="docs-table-body">
+                                    <tr>
+                                        <td colspan="5" class="table-loading">Loading indexed documents...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        
+                        <div class="welcome-action-box">
+                            <button type="button" class="welcome-action-btn" id="btn-welcome-docs">
+                                <i class="fa-solid fa-folder-tree"></i>
+                                <span>Open Documents Tab & Upload Files</span>
+                            </button>
+                        </div>
+
+                    <!-- Visual Images & Media Section -->
+                    <div class="docs-card library-card" style="margin-top: 1.5rem;">
+                        <div class="card-header library-header">
+                            <div>
+                                <h4><i class="fa-solid fa-images"></i> Visual Images & Media Gallery</h4>
+                                <p class="card-subtitle">JPEG & PNG images indexed with 3 key description points (Ollama Vision) and dense 384d vector embeddings.</p>
+                            </div>
+                            <div class="library-actions">
+                                <div class="search-input-wrapper">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input type="text" id="filter-images-input" placeholder="Filter indexed images...">
+                                </div>
+                                <button class="btn-secondary" id="btn-refresh-images" title="Refresh images">
+                                    <i class="fa-solid fa-arrows-rotate"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="table-container">
+                            <table class="docs-table" id="images-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 70px;">Preview</th>
+                                        <th style="width: 220px;">Filename & Category</th>
+                                        <th>3 Key Description Points (Ollama Vision)</th>
+                                        <th style="width: 100px; text-align: right;">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="images-table-body">
+                                    <tr>
+                                        <td colspan="4" class="table-loading">Loading indexed images...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        
+        <!-- Sidebar Overlay Backdrop for Mobile -->
+        <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    </div>
+
+    <!-- Marked.js Markdown Parser via CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Application Logic -->
+    <script src="app.js?v=2.5.0"></script>
+
+    <!-- Image Lightbox Modal -->
+    <div class="image-modal-backdrop" id="image-modal" style="display: none;">
+        <div class="image-modal-content">
+            <button class="image-modal-close" id="btn-close-image-modal" aria-label="Close image modal">&times;</button>
+            <img id="image-modal-img" src="" alt="Full view">
+            <div class="image-modal-caption" id="image-modal-caption"></div>
+        </div>
+    </div>
+
+</body>
+</html>

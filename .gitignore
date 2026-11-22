@@ -1,0 +1,101 @@
+# ==========================================
+# Environment Variables & Secrets
+# ==========================================
+.env
+local.env
+*.env
+.env.*
+!.env.example
+
+# ==========================================
+# Document Input, Output & Conversion Storage
+# ==========================================
+input_docs/
+markdown_output/
+
+# Document formats
+*.pdf
+*.docx
+*.doc
+*.pptx
+*.ppt
+*.xlsx
+*.xls
+*.csv
+*.tsv
+*.epub
+*.rtf
+
+# ==========================================
+# Images & Visual Media
+# ==========================================
+uploaded_images/
+
+# Image formats
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.gif
+*.bmp
+*.tiff
+*.tif
+*.svg
+*.raw
+*.ico
+
+# ==========================================
+# Python & Caches
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# HuggingFace & Machine Learning Caches / Weights
+.cache/
+models/
+huggingface/
+checkpoints/
+*.bin
+*.pt
+*.pth
+*.onnx
+*.safetensors
+
+# ==========================================
+# Virtual Environments
+# ==========================================
+venv/
+env/
+markervenv/
+.venv/
+ENV/
+
+# ==========================================
+# Logs & Temporary Files
+# ==========================================
+*.log
+logs/
+temp/
+tmp/
+scratch/
+test_*.py
+
+# ==========================================
+# Operating System & IDE Files
+# ==========================================
+.DS_Store
+Thumbs.db
+ehthumbs.db
+.vscode/
+.idea/
+*.swp
+*.swo
