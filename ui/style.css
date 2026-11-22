@@ -2125,10 +2125,12 @@ h1, h2, h3, h4, .brand-name {
     position: absolute;
     top: 10px;
     right: 14px;
-    background: rgba(255, 255, 255, 0.1);
+    z-index: 25;
+    background: rgba(255, 255, 255, 0.15);
     border: none;
     color: #ffffff;
     font-size: 1.6rem;
+    line-height: 1;
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -2136,11 +2138,12 @@ h1, h2, h3, h4, .brand-name {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.2s ease;
+    transition: background 0.2s ease, transform 0.2s ease;
 }
 
 .image-modal-close:hover {
     background: var(--danger);
+    transform: scale(1.08);
 }
 
 .image-modal-caption {

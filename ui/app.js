@@ -181,6 +181,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize Liquid Background Animation
     initLiquidBg();
 
+    // Initialize Image Lightbox Modal
+    initImageModal();
+
     // Initialize Reverse Image Search
     initReverseImageSearch();
 });
@@ -1268,6 +1271,46 @@ function openImageModal(src, filename, caption) {
         `;
         modal.style.display = 'flex';
     }
+}
+
+function initImageModal() {
+    const modal = document.getElementById('image-modal');
+    const btnClose = document.getElementById('btn-close-image-modal');
+    if (!modal) return;
+
+    const closeModal = () => {
+        modal.style.display = 'none';
+        const modalImg = document.getElementById('image-modal-img');
+        if (modalImg) modalImg.src = '';
+    };
+
+    if (btnClose) {
+        btnClose.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            closeModal();
+        });
+    }
+
+    // Clicking anywhere on backdrop outside modal content closes the modal
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeModal();
+        }
+    });
+
+    // Pressing ESC key closes image lightbox and face picker modal
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            if (modal.style.display === 'flex' || modal.style.display === 'block') {
+                closeModal();
+            }
+            const facePicker = document.getElementById('face-picker-modal');
+            if (facePicker && (facePicker.style.display === 'flex' || facePicker.style.display === 'block')) {
+                facePicker.style.display = 'none';
+            }
+        }
+    });
 }
 
 
