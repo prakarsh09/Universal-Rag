@@ -767,13 +767,14 @@ class DocumentIngestionWorker:
         }
 
     def _process_image_job(self, job: DocumentJob, cuda_ok: bool, device_label: str):
-        """Processes an uploaded image: extracts 3 description points via Ollama vision,
-        computes dense embedding, and creates (:Image) node with vector and full-text indexes.
+        """Processes an uploaded image: detects and embeds faces via InsightFace ArcFace (512d),
+        extracts 3 description points via Ollama vision, computes dense embedding,
+        and creates (:Image) and (:Face) nodes with vector and full-text indexes.
         """
-        # Step 1: Vision analysis
+        # Step 1: Face detection & Vision analysis
         job.status = "converting"
-        job.progress_percent = 25
-        job.status_message = "Analyzing visual content with local Ollama vision (gemma4:e2b)..."
+        job.progress_percent = 20
+        job.status_message = "Detecting faces (InsightFace) and analyzing visual content (gemma4:e2b)..."
 
         target_img_dir = Path(self.image_dir) / job.category
         os.makedirs(target_img_dir, exist_ok=True)
@@ -784,6 +785,20 @@ class DocumentIngestionWorker:
 
         image_url = f"/images/{job.category}/{job.original_filename}"
 
+        # Detect and embed faces
+        detected_faces = []
+        try:
+            from backend.face_engine import get_face_engine
+            face_engine = get_face_engine()
+            detected_faces = face_engine.detect_and_embed(dest_img_path)
+            if detected_faces:
+                faces_dir = Path(self.image_dir) / "_faces"
+                face_engine.save_face_crops(dest_img_path, detected_faces, output_dir=faces_dir, file_prefix=dest_img_path.stem)
+                logger.info(f"Detected {len(detected_faces)} face(s) in '{job.original_filename}'.")
+        except Exception as e:
+            logger.warning(f"Face detection failed on '{job.original_filename}': {e}")
+
+        # Extract 3 visual points via local Ollama vision
         vision_data = self._extract_ollama_vision_description(dest_img_path, category=job.category)
         point1 = vision_data["point1"]
         point2 = vision_data["point2"]
@@ -813,7 +828,7 @@ class DocumentIngestionWorker:
         # Step 3: Neo4j Indexing
         job.status = "indexing"
         job.progress_percent = 85
-        job.status_message = "Writing (:Image) node, vector index, and fulltext index to Neo4j..."
+        job.status_message = "Writing (:Image), (:Face) nodes, and vector indexes to Neo4j..."
 
         if not self.driver:
             raise RuntimeError("Neo4j driver is not connected.")
@@ -835,6 +850,16 @@ class DocumentIngestionWorker:
                 }}}}
             """)
 
+            session.run("""
+                CREATE VECTOR INDEX face_vector_index IF NOT EXISTS
+                FOR (f:Face)
+                ON (f.embedding)
+                OPTIONS {indexConfig: {
+                    `vector.dimensions`: 512,
+                    `vector.similarity_function`: 'cosine'
+                }}
+            """)
+
             image_id = str(uuid.uuid4())
             session.run("""
                 MERGE (i:Image {filename: $filename})
@@ -848,6 +873,7 @@ class DocumentIngestionWorker:
                     i.description = $description,
                     i.category = $category,
                     i.embedding = $embedding,
+                    i.face_count = $face_count,
                     i.created_at = $created_at
             """, {
                 "filename": job.original_filename,
@@ -861,6 +887,7 @@ class DocumentIngestionWorker:
                 "description": combined_text,
                 "category": job.category,
                 "embedding": embedding,
+                "face_count": len(detected_faces),
                 "created_at": time.time()
             })
 
@@ -875,13 +902,43 @@ class DocumentIngestionWorker:
                 "filename": job.original_filename
             })
 
+            # Clean any previous faces on re-upload
+            session.run("""
+                MATCH (i:Image {filename: $filename})-[r:HAS_FACE]->(old_f:Face)
+                DETACH DELETE old_f
+            """, {"filename": job.original_filename})
+
+            # Store each detected face as a (:Face) node linked via :HAS_FACE
+            for face in detected_faces:
+                face_id = str(uuid.uuid4())
+                session.run("""
+                    MATCH (i:Image {filename: $filename})
+                    CREATE (f:Face {
+                        id: $id,
+                        bbox: $bbox,
+                        det_score: $det_score,
+                        embedding: $embedding,
+                        crop_url: $crop_url,
+                        created_at: $created_at
+                    })
+                    CREATE (i)-[:HAS_FACE]->(f)
+                """, {
+                    "filename": job.original_filename,
+                    "id": face_id,
+                    "bbox": face["bbox"],
+                    "det_score": face["det_score"],
+                    "embedding": face["embedding"],
+                    "crop_url": face.get("crop_url", ""),
+                    "created_at": time.time()
+                })
+
         job.chunks_count = 1
         job.progress_percent = 100
         job.status_message = "Image analyzed and indexed successfully!"
-        logger.info(f"Image '{job.original_filename}' successfully indexed with 3 description points.")
+        logger.info(f"Image '{job.original_filename}' successfully indexed with {len(detected_faces)} face(s) and 3 description points.")
 
     def get_indexed_images(self) -> List[Dict[str, Any]]:
-        """Queries Neo4j for all indexed images and their 3 description points."""
+        """Queries Neo4j for all indexed images and their 3 description points and face metadata."""
         if not self.driver:
             return []
 
@@ -889,9 +946,12 @@ class DocumentIngestionWorker:
             try:
                 result = session.run("""
                     MATCH (i:Image)
+                    OPTIONAL MATCH (i)-[:HAS_FACE]->(f:Face)
+                    WITH i, count(f) as face_count, collect(f.crop_url) as face_crops
                     RETURN i.id as id, i.filename as filename, i.image_url as image_url,
                            i.point1 as point1, i.point2 as point2, i.point3 as point3,
-                           i.summary as summary, i.category as category, i.created_at as created_at
+                           i.summary as summary, i.category as category, i.created_at as created_at,
+                           face_count, face_crops
                     ORDER BY i.created_at DESC
                 """)
                 images = []
@@ -905,6 +965,8 @@ class DocumentIngestionWorker:
                         "point3": record["point3"] or "",
                         "summary": record["summary"] or "",
                         "category": record["category"] or "General",
+                        "face_count": record["face_count"] or 0,
+                        "face_crops": [c for c in (record["face_crops"] or []) if c],
                         "created_at": record["created_at"] or 0
                     })
                 return images
@@ -913,7 +975,7 @@ class DocumentIngestionWorker:
                 return []
 
     def delete_image(self, filename: str) -> bool:
-        """Deletes an image from Neo4j and disk."""
+        """Deletes an image and associated face nodes from Neo4j and disk."""
         if not self.driver:
             return False
 
@@ -926,7 +988,11 @@ class DocumentIngestionWorker:
                     except Exception as e:
                         logger.warning(f"Failed to remove image file {rec['fp']}: {e}")
 
-                session.run("MATCH (i:Image {filename: $fn}) DETACH DELETE i", {"fn": filename})
+                session.run("""
+                    MATCH (i:Image {filename: $fn})
+                    OPTIONAL MATCH (i)-[:HAS_FACE]->(f:Face)
+                    DETACH DELETE f, i
+                """, {"fn": filename})
                 return True
             except Exception as e:
                 logger.error(f"Failed to delete image {filename}: {e}")

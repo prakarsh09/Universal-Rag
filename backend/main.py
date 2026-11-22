@@ -2,8 +2,10 @@ import os
 import sys
 import re
 import json
+import uuid
 import asyncio
 import traceback
+from typing import Optional, List, Dict, Any
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -79,9 +81,14 @@ query_graph_module = importlib.import_module("3_query_graph")
 HybridNeo4jRetriever = query_graph_module.HybridNeo4jRetriever
 UniversalTableBoostReranker = query_graph_module.UniversalTableBoostReranker
 HybridNeo4jImageRetriever = getattr(query_graph_module, "HybridNeo4jImageRetriever", None)
+Neo4jFaceRetriever = getattr(query_graph_module, "Neo4jFaceRetriever", None)
 classify_search_intent = getattr(query_graph_module, "classify_search_intent", None)
 
 image_retriever = HybridNeo4jImageRetriever(driver=driver, embed_model=embed_model) if HybridNeo4jImageRetriever else None
+face_retriever = Neo4jFaceRetriever(driver=driver) if Neo4jFaceRetriever and driver else None
+
+from backend.face_engine import get_face_engine
+face_engine = get_face_engine()
 
 qa_prompt_tmpl = (
     "Context information is below.\n"
@@ -336,6 +343,127 @@ def delete_image(filename: str):
     if not success:
         raise HTTPException(status_code=500, detail="Failed to delete image from graph.")
     return {"success": True, "message": f"Image '{filename}' deleted from graph."}
+
+
+@app.post("/api/search/reverse-image")
+async def reverse_image_search(
+    file: Optional[UploadFile] = File(None),
+    temp_image_id: Optional[str] = Form(None),
+    selected_face_index: Optional[int] = Form(None),
+    min_similarity: float = Form(0.48),
+    top_k: int = Form(6)
+):
+    """Performs Reverse Image Search:
+    - Case 1: 1 Face Detected -> 512d ArcFace vector cosine search (threshold >= min_similarity)
+    - Case 2: Multiple Faces -> Returns face crops and boxes for user selection / Google Photos picker
+    - Case 3: No Faces Detected -> Forwards image to local Ollama VLM (gemma4:e2b) for 3 description points,
+              followed by 384d hybrid visual retrieval across existing image nodes.
+    """
+    temp_dir = os.path.join(images_dir, "_temp_searches")
+    os.makedirs(temp_dir, exist_ok=True)
+
+    img_path = None
+
+    if file is not None:
+        filename = file.filename or "query.jpg"
+        ext = os.path.splitext(filename)[1].lower()
+        if ext not in [".jpg", ".jpeg", ".png", ".webp"]:
+            raise HTTPException(status_code=400, detail="Invalid image format. Supported: JPEG, PNG, WebP.")
+        safe_id = f"{uuid.uuid4().hex[:12]}_{re.sub(r'[^a-zA-Z0-9._-]', '_', filename)}"
+        img_path = os.path.join(temp_dir, safe_id)
+        content = await file.read()
+        with open(img_path, "wb") as f:
+            f.write(content)
+        temp_image_id = safe_id
+    elif temp_image_id:
+        img_path = os.path.join(temp_dir, os.path.basename(temp_image_id))
+        if not os.path.exists(img_path):
+            raise HTTPException(status_code=404, detail="Session image expired or not found.")
+    else:
+        raise HTTPException(status_code=400, detail="Either file or temp_image_id must be provided.")
+
+    # 1. Run Face Detection & ArcFace Embedding
+    faces = face_engine.detect_and_embed(img_path)
+
+    # 2. Branch A: Multiple Faces and user hasn't selected one yet
+    if len(faces) > 1 and selected_face_index is None:
+        return {
+            "status": "multiple_faces_detected",
+            "search_type": "face_disambiguation_required",
+            "temp_image_id": temp_image_id,
+            "query_image_url": f"/images/_temp_searches/{temp_image_id}",
+            "faces_detected": len(faces),
+            "faces": [
+                {
+                    "face_index": f["index"],
+                    "bbox": f["bbox"],
+                    "det_score": round(f["det_score"], 3),
+                    "crop_base64": f["crop_base64"]
+                }
+                for f in faces
+            ]
+        }
+
+    # 3. Branch B: Exactly 1 face or user selected specific face / "Search All" (-1)
+    if faces and (len(faces) == 1 or selected_face_index is not None):
+        if not face_retriever:
+            raise HTTPException(status_code=500, detail="Face retriever is not connected to Neo4j.")
+
+        if selected_face_index is not None and selected_face_index == -1:
+            # Search all detected faces (union)
+            face_vectors = [f["embedding"] for f in faces]
+            matched_images = await asyncio.to_thread(
+                face_retriever.retrieve_multi, face_vectors, min_similarity, top_k
+            )
+            selected_crop = ""
+        else:
+            idx = selected_face_index if selected_face_index is not None and 0 <= selected_face_index < len(faces) else 0
+            target_face = faces[idx]
+            face_vector = target_face["embedding"]
+            selected_crop = target_face["crop_base64"]
+            matched_images = await asyncio.to_thread(
+                face_retriever.retrieve, face_vector, min_similarity, top_k
+            )
+
+        return {
+            "status": "completed",
+            "search_type": "face_search",
+            "temp_image_id": temp_image_id,
+            "query_image_url": f"/images/_temp_searches/{temp_image_id}",
+            "faces_detected": len(faces),
+            "selected_face_crop": selected_crop,
+            "min_similarity": min_similarity,
+            "matches": matched_images,
+            "total_matches": len(matched_images)
+        }
+
+    # 4. Branch C: No Faces Detected -> Fallback to Local VLM (gemma4:e2b) visual points + hybrid search
+    vision_data = await asyncio.to_thread(doc_worker._extract_ollama_vision_description, Path(img_path))
+    vlm_summary = vision_data.get("summary", "")
+    p1 = vision_data.get("point1", "")
+    p2 = vision_data.get("point2", "")
+    p3 = vision_data.get("point3", "")
+
+    search_query = f"{vlm_summary} {p1} {p2}".strip()
+    matched_images = []
+    if image_retriever and search_query:
+        matched_images = await asyncio.to_thread(image_retriever.retrieve, search_query)
+
+    return {
+        "status": "completed",
+        "search_type": "vlm_semantic_search",
+        "temp_image_id": temp_image_id,
+        "query_image_url": f"/images/_temp_searches/{temp_image_id}",
+        "faces_detected": 0,
+        "vlm_description": {
+            "summary": vlm_summary,
+            "point1": p1,
+            "point2": p2,
+            "point3": p3
+        },
+        "matches": matched_images,
+        "total_matches": len(matched_images)
+    }
 
 
 def rewrite_query(message: str, history: list) -> str:

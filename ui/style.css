@@ -2280,3 +2280,337 @@ h1, h2, h3, h4, .brand-name {
     background: rgba(255, 255, 255, 0.08);
     color: var(--text-muted);
 }
+
+/* =============================================================
+   REVERSE IMAGE SEARCH & MULTI-FACE SELECTION STYLES
+   ============================================================= */
+
+/* Camera Button in Chat Footer */
+.reverse-search-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.15rem;
+    cursor: pointer;
+    padding: 8px 10px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+.reverse-search-btn:hover {
+    color: var(--accent);
+    background: rgba(99, 102, 241, 0.12);
+    transform: scale(1.08);
+}
+
+/* User Message Query Image Preview */
+.reverse-search-user-bubble {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.user-query-text {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.88rem;
+}
+
+.user-query-img-preview {
+    max-width: 220px;
+    max-height: 220px;
+    border-radius: 10px;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(0, 0, 0, 0.3);
+}
+
+.user-query-img-preview img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Multi-Face Disambiguation Modal (Google Photos Style) */
+.face-picker-modal-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 10000;
+    background: rgba(5, 7, 12, 0.85);
+    backdrop-filter: blur(10px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    animation: fadeIn 0.2s ease;
+}
+
+.face-picker-content {
+    background: rgba(20, 24, 33, 0.98);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    padding: 24px;
+    max-width: 540px;
+    width: 100%;
+    box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.face-picker-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.face-picker-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #f1f5f9;
+}
+
+.face-picker-title i {
+    color: var(--accent);
+}
+
+.btn-close-face-picker {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.2rem;
+    cursor: pointer;
+    border-radius: 6px;
+    padding: 4px 8px;
+    transition: all 0.2s ease;
+}
+
+.btn-close-face-picker:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.face-picker-desc {
+    font-size: 0.86rem;
+    color: var(--text-muted);
+    line-height: 1.45;
+    margin: 0;
+}
+
+.face-chips-container {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 12px;
+    max-height: 320px;
+    overflow-y: auto;
+    padding: 4px;
+}
+
+.face-chip {
+    background: rgba(30, 36, 50, 0.7);
+    border: 1.5px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.face-chip:hover {
+    background: rgba(99, 102, 241, 0.15);
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(99, 102, 241, 0.3);
+}
+
+.face-chip-avatar {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: #000;
+}
+
+.face-chip:hover .face-chip-avatar {
+    border-color: var(--accent);
+}
+
+.face-chip-avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.face-chip-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+}
+
+.face-chip-info strong {
+    font-size: 0.8rem;
+    color: #e2e8f0;
+}
+
+.face-chip-info span {
+    font-size: 0.7rem;
+    color: #94a3b8;
+}
+
+.face-picker-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    padding-top: 14px;
+}
+
+.btn-search-all-faces, .btn-bubble-search-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 10px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.4);
+    color: #c7d2fe;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.btn-search-all-faces:hover, .btn-bubble-search-all:hover {
+    background: var(--accent);
+    color: #fff;
+    border-color: var(--accent);
+}
+
+/* Inline Chat Multi-Face Selector Bubble */
+.multi-face-bubble-container {
+    background: rgba(22, 27, 38, 0.8);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin: 8px 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.multi-face-bubble-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.92rem;
+    color: #e2e8f0;
+}
+
+.multi-face-bubble-header i {
+    color: var(--accent);
+}
+
+.multi-face-bubble-desc {
+    font-size: 0.82rem;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.face-chips-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+
+/* Face Match Badges on Image Cards */
+.image-rank-badge.face-match {
+    background: rgba(16, 185, 129, 0.95);
+    color: #ffffff;
+    box-shadow: 0 0 12px rgba(16, 185, 129, 0.45);
+}
+
+.matched-face-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.72rem;
+    padding: 2px 8px;
+    border-radius: 14px;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    color: #6ee7b7;
+    margin-top: 4px;
+}
+
+.matched-face-crop-mini {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 1px solid rgba(16, 185, 129, 0.5);
+}
+
+/* VLM Semantic Fallback & No Match Banners */
+.vlm-fallback-banner {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(245, 158, 11, 0.12);
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    color: #fde68a;
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    margin-bottom: 10px;
+}
+
+.no-match-alert {
+    margin: 10px 0;
+}
+
+.no-match-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    background: rgba(30, 41, 59, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 14px 16px;
+}
+
+.no-match-icon {
+    font-size: 1.4rem;
+    color: #ef4444;
+    margin-top: 2px;
+}
+
+.no-match-content strong {
+    font-size: 0.9rem;
+    color: #f1f5f9;
+    display: block;
+    margin-bottom: 4px;
+}
+
+.no-match-content p {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    margin: 0;
+    line-height: 1.4;
+}
+

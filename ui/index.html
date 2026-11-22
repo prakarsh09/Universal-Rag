@@ -11,7 +11,7 @@
     <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Main Style Sheet -->
-    <link rel="stylesheet" href="style.css?v=2.5.0">
+    <link rel="stylesheet" href="style.css?v=2.6.1">
 </head>
 <body>
     <div class="app-container">
@@ -152,9 +152,13 @@
                 <!-- Input Form Block -->
                 <footer class="chat-footer">
                     <form id="chat-form" class="input-container">
+                        <input type="file" id="reverse-search-input" accept=".jpg,.jpeg,.png,.webp" style="display: none;">
+                        <button type="button" id="btn-reverse-search" class="reverse-search-btn" title="Reverse Image Search (Face Identity / Visual Match)">
+                            <i class="fa-solid fa-camera"></i>
+                        </button>
                         <textarea 
                             id="user-input" 
-                            placeholder="Ask anything about your documents... (e.g., summarize key points or compare figures)" 
+                            placeholder="Ask documents, or click camera for Reverse Image Search..." 
                             rows="1" 
                             required
                         ></textarea>
@@ -418,7 +422,31 @@
     <!-- Marked.js Markdown Parser via CDN -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     <!-- Application Logic -->
-    <script src="app.js?v=2.5.0"></script>
+    <script src="app.js?v=2.6.1"></script>
+
+    <!-- Multi-Face Selector Modal (Google Photos Style Disambiguation) -->
+    <div class="face-picker-modal-backdrop" id="face-picker-modal" style="display: none;">
+        <div class="face-picker-content">
+            <div class="face-picker-header">
+                <div class="face-picker-title">
+                    <i class="fa-solid fa-users-viewfinder"></i>
+                    <span id="face-picker-heading">Multiple Faces Detected</span>
+                </div>
+                <button type="button" class="btn-close-face-picker" id="btn-close-face-picker" aria-label="Close">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <p class="face-picker-desc">Click a face below to search for that specific person in the knowledge graph, or choose to search across all detected faces.</p>
+            <div class="face-chips-container" id="face-chips-container">
+                <!-- Dynamically populated face thumbnails -->
+            </div>
+            <div class="face-picker-footer">
+                <button type="button" class="btn-search-all-faces" id="btn-search-all-faces">
+                    <i class="fa-solid fa-people-arrows"></i> Search All Faces
+                </button>
+            </div>
+        </div>
+    </div>
 
     <!-- Image Lightbox Modal -->
     <div class="image-modal-backdrop" id="image-modal" style="display: none;">

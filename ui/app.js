@@ -180,6 +180,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Initialize Liquid Background Animation
     initLiquidBg();
+
+    // Initialize Reverse Image Search
+    initReverseImageSearch();
 });
 
 // -------------------------------------------------------------
@@ -640,6 +643,42 @@ function initLiquidBg() {
 // Tabs & Documents Management Logic
 // ==========================================================================
 
+function switchTab(tabId) {
+    if (tabId === 'chat') {
+        if (tabBtnChat) tabBtnChat.classList.add('active');
+        if (tabBtnDocs) tabBtnDocs.classList.remove('active');
+        if (headerTabChat) headerTabChat.classList.add('active');
+        if (headerTabDocs) headerTabDocs.classList.remove('active');
+
+        if (viewChat) viewChat.style.display = 'flex';
+        if (viewDocs) viewDocs.style.display = 'none';
+
+        if (mainHeaderTitle) mainHeaderTitle.textContent = 'Universal Knowledge Graph Agent';
+        if (mainHeaderSubtitle) mainHeaderSubtitle.textContent = 'Hybrid Vector + Full-Text Search with Graph-Based Context Expansion';
+    } else if (tabId === 'docs') {
+        if (tabBtnDocs) tabBtnDocs.classList.add('active');
+        if (tabBtnChat) tabBtnChat.classList.remove('active');
+        if (headerTabDocs) headerTabDocs.classList.add('active');
+        if (headerTabChat) headerTabChat.classList.remove('active');
+
+        if (viewDocs) viewDocs.style.display = 'flex';
+        if (viewChat) viewChat.style.display = 'none';
+
+        if (mainHeaderTitle) mainHeaderTitle.textContent = 'Knowledge Graph Documents';
+        if (mainHeaderSubtitle) mainHeaderSubtitle.textContent = 'Upload & Ingest documents with background worker queue (Concurrency = 1)';
+
+        // Fetch live status when switching to Docs tab
+        if (typeof fetchQueueStatus === 'function') fetchQueueStatus();
+        if (typeof fetchIndexedDocuments === 'function') fetchIndexedDocuments();
+    }
+
+    // Close sidebar on mobile after tab selection
+    if (sidebar && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+        if (sidebarOverlay) sidebarOverlay.classList.remove('active');
+    }
+}
+
 function initTabs() {
     tabBtnChat = document.getElementById('tab-btn-chat');
     tabBtnDocs = document.getElementById('tab-btn-docs');
@@ -651,42 +690,6 @@ function initTabs() {
     mainHeaderSubtitle = document.getElementById('main-header-subtitle');
     navQueueBadge = document.getElementById('nav-queue-badge');
     headerQueueDot = document.getElementById('header-queue-dot');
-
-    function switchTab(tabId) {
-        if (tabId === 'chat') {
-            if (tabBtnChat) tabBtnChat.classList.add('active');
-            if (tabBtnDocs) tabBtnDocs.classList.remove('active');
-            if (headerTabChat) headerTabChat.classList.add('active');
-            if (headerTabDocs) headerTabDocs.classList.remove('active');
-
-            if (viewChat) viewChat.style.display = 'flex';
-            if (viewDocs) viewDocs.style.display = 'none';
-
-            if (mainHeaderTitle) mainHeaderTitle.textContent = 'Universal Knowledge Graph Agent';
-            if (mainHeaderSubtitle) mainHeaderSubtitle.textContent = 'Hybrid Vector + Full-Text Search with Graph-Based Context Expansion';
-        } else if (tabId === 'docs') {
-            if (tabBtnDocs) tabBtnDocs.classList.add('active');
-            if (tabBtnChat) tabBtnChat.classList.remove('active');
-            if (headerTabDocs) headerTabDocs.classList.add('active');
-            if (headerTabChat) headerTabChat.classList.remove('active');
-
-            if (viewDocs) viewDocs.style.display = 'flex';
-            if (viewChat) viewChat.style.display = 'none';
-
-            if (mainHeaderTitle) mainHeaderTitle.textContent = 'Knowledge Graph Documents';
-            if (mainHeaderSubtitle) mainHeaderSubtitle.textContent = 'Upload & Ingest documents with background worker queue (Concurrency = 1)';
-
-            // Fetch live status when switching to Docs tab
-            fetchQueueStatus();
-            fetchIndexedDocuments();
-        }
-
-        // Close sidebar on mobile after tab selection
-        if (sidebar && sidebar.classList.contains('open')) {
-            sidebar.classList.remove('open');
-            if (sidebarOverlay) sidebarOverlay.classList.remove('active');
-        }
-    }
 
     if (tabBtnChat) tabBtnChat.addEventListener('click', () => switchTab('chat'));
     if (tabBtnDocs) tabBtnDocs.addEventListener('click', () => switchTab('docs'));
@@ -1144,7 +1147,7 @@ function escapeHtml(str) {
 // -------------------------------------------------------------
 // Visual Image Results & Modal Handlers (Rank-wise & Downloadable)
 // -------------------------------------------------------------
-function renderImageResults(images) {
+function renderImageResults(images, queryMeta = null) {
     if (!images || images.length === 0) return;
 
     if (currentStatusLog) {
@@ -1159,10 +1162,26 @@ function renderImageResults(images) {
     const container = document.createElement('div');
     container.className = 'image-results-container';
 
+    // Header customization based on search type
     const header = document.createElement('div');
     header.className = 'image-results-header';
-    header.innerHTML = `<i class="fa-solid fa-images"></i> Ranked Visual Results (${images.length} Image${images.length > 1 ? 's' : ''})`;
+    
+    if (queryMeta && queryMeta.search_type === 'face_search') {
+        header.innerHTML = `<i class="fa-solid fa-user-check"></i> Reverse Face Search Results (${images.length} Match${images.length > 1 ? 'es' : ''})`;
+    } else if (queryMeta && queryMeta.search_type === 'vlm_semantic_search') {
+        header.innerHTML = `<i class="fa-solid fa-eye"></i> Visual Similarity Results (${images.length} Match${images.length > 1 ? 'es' : ''})`;
+    } else {
+        header.innerHTML = `<i class="fa-solid fa-images"></i> Ranked Visual Results (${images.length} Image${images.length > 1 ? 's' : ''})`;
+    }
     container.appendChild(header);
+
+    // Optional VLM semantic fallback banner
+    if (queryMeta && queryMeta.search_type === 'vlm_semantic_search') {
+        const vlmBanner = document.createElement('div');
+        vlmBanner.className = 'vlm-fallback-banner';
+        vlmBanner.innerHTML = `<i class="fa-solid fa-wand-magic-sparkles"></i> <strong>No human faces detected.</strong> Forwarded to local VLM (gemma4:e2b) for visual semantic retrieval.`;
+        container.appendChild(vlmBanner);
+    }
 
     const grid = document.createElement('div');
     grid.className = 'image-results-grid';
@@ -1172,12 +1191,17 @@ function renderImageResults(images) {
         const card = document.createElement('div');
         card.className = 'image-card';
 
+        const isFaceMatch = img.match_type === 'face_match' || (queryMeta && queryMeta.search_type === 'face_search');
+        const scoreBadge = isFaceMatch && img.similarity_score
+            ? `<span class="image-rank-badge face-match"><i class="fa-solid fa-face-smile"></i> ${(img.similarity_score * 100).toFixed(1)}% Match</span>`
+            : `<span class="image-rank-badge"><i class="fa-solid fa-trophy"></i> Rank #${rankNum}</span>`;
+
         const thumbWrapper = document.createElement('div');
         thumbWrapper.className = 'image-thumb-wrapper';
         thumbWrapper.title = `Click to zoom or download ${img.filename}`;
         thumbWrapper.innerHTML = `
             <img src="${img.image_url}" alt="${img.filename}" loading="lazy">
-            <span class="image-rank-badge"><i class="fa-solid fa-trophy"></i> Rank #${rankNum}</span>
+            ${scoreBadge}
             <div class="image-zoom-overlay"><i class="fa-solid fa-magnifying-glass-plus"></i> Click to Zoom</div>
         `;
         thumbWrapper.addEventListener('click', () => {
@@ -1187,11 +1211,16 @@ function renderImageResults(images) {
         const body = document.createElement('div');
         body.className = 'image-card-body';
 
+        const matchedFaceHtml = img.matched_face_crop
+            ? `<div class="matched-face-pill"><img src="${img.matched_face_crop}" alt="Face Crop" class="matched-face-crop-mini"> <span>Matched Person</span></div>`
+            : '';
+
         body.innerHTML = `
             <div class="image-card-header">
                 <span class="image-card-filename" title="${img.filename}">${escapeHtml(img.filename)}</span>
                 <span class="image-cat-pill">${escapeHtml(img.category || 'General')}</span>
             </div>
+            ${matchedFaceHtml}
             <div class="image-card-points">
                 <div><span class="image-point-tag visual">Visual</span> ${escapeHtml(img.point1 || 'Visual content')}</div>
                 <div><span class="image-point-tag text">Text</span> ${escapeHtml(img.point2 || 'None detected')}</div>
@@ -1239,4 +1268,327 @@ function openImageModal(src, filename, caption) {
         `;
         modal.style.display = 'flex';
     }
+}
+
+
+// -------------------------------------------------------------
+// Reverse Image Search & Multi-Face Disambiguation
+// -------------------------------------------------------------
+let currentReverseSearchSession = null;
+
+function initReverseImageSearch() {
+    const btnReverseSearch = document.getElementById('btn-reverse-search');
+    const reverseSearchInput = document.getElementById('reverse-search-input');
+    const facePickerModal = document.getElementById('face-picker-modal');
+    const btnCloseFacePicker = document.getElementById('btn-close-face-picker');
+    const btnSearchAllFaces = document.getElementById('btn-search-all-faces');
+
+    if (btnReverseSearch && reverseSearchInput) {
+        btnReverseSearch.addEventListener('click', () => {
+            reverseSearchInput.value = '';
+            reverseSearchInput.click();
+        });
+
+        reverseSearchInput.addEventListener('change', (e) => {
+            if (e.target.files && e.target.files.length > 0) {
+                const file = e.target.files[0];
+                handleReverseImageSearch(file);
+            }
+        });
+    }
+
+    if (btnCloseFacePicker && facePickerModal) {
+        btnCloseFacePicker.addEventListener('click', () => {
+            facePickerModal.style.display = 'none';
+        });
+    }
+
+    if (btnSearchAllFaces) {
+        btnSearchAllFaces.addEventListener('click', () => {
+            if (currentReverseSearchSession && currentReverseSearchSession.temp_image_id) {
+                if (facePickerModal) facePickerModal.style.display = 'none';
+                handleReverseImageSearch(null, currentReverseSearchSession.temp_image_id, -1);
+            }
+        });
+    }
+}
+
+async function handleReverseImageSearch(file = null, tempImageId = null, selectedFaceIndex = null) {
+    // 1. Ensure chat view is active
+    if (typeof switchTab === 'function') {
+        switchTab('chat');
+    }
+
+    // 2. Render user query message
+    if (file) {
+        const dataUrl = await new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target.result);
+            reader.onerror = () => resolve('');
+            reader.readAsDataURL(file);
+        });
+        renderReverseImageUserMessage(file.name, dataUrl);
+    } else if (tempImageId !== null && selectedFaceIndex !== null) {
+        const choiceLabel = selectedFaceIndex === -1 ? 'All Detected Faces' : `Face #${selectedFaceIndex + 1}`;
+        renderReverseChoiceUserMessage(choiceLabel);
+    }
+
+    // 3. Create assistant bubble with status spinner
+    createAssistantBubble();
+    if (currentStatusLog) {
+        currentStatusLog.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Scanning image: detecting facial landmarks (ArcFace) & visual semantics...';
+    }
+    disableInput(true);
+
+    const formData = new FormData();
+    if (file) {
+        formData.append('file', file);
+    }
+    if (tempImageId) {
+        formData.append('temp_image_id', tempImageId);
+    }
+    if (selectedFaceIndex !== null) {
+        formData.append('selected_face_index', selectedFaceIndex);
+    }
+
+    try {
+        const res = await fetch('/api/search/reverse-image', {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!res.ok) {
+            const err = await res.json().catch(() => ({ detail: 'Reverse image search failed.' }));
+            throw new Error(err.detail || 'Reverse image search request failed.');
+        }
+
+        const data = await res.json();
+
+        // Branch A: Multiple faces detected -> Prompt user to select
+        if (data.status === 'multiple_faces_detected') {
+            if (currentStatusLog) {
+                currentStatusLog.remove();
+                currentStatusLog = null;
+            }
+            if (currentAssistantBubble) {
+                const typingInd = currentAssistantBubble.querySelector('.typing-indicator');
+                if (typingInd) typingInd.remove();
+            }
+
+            currentReverseSearchSession = data;
+            renderMultiFaceSelectorBubble(data);
+            openMultiFacePickerModal(data);
+            resetTurnState();
+            disableInput(false);
+            return;
+        }
+
+        // Branch B: Completed Search (Face or VLM semantic)
+        if (data.status === 'completed') {
+            if (currentStatusLog) {
+                currentStatusLog.remove();
+                currentStatusLog = null;
+            }
+            if (currentAssistantBubble) {
+                const typingInd = currentAssistantBubble.querySelector('.typing-indicator');
+                if (typingInd) typingInd.remove();
+            }
+
+            const matches = data.matches || [];
+            if (matches.length > 0) {
+                renderImageResults(matches, data);
+                if (currentTextContainer) {
+                    if (data.search_type === 'face_search') {
+                        currentTextContainer.innerHTML = `<p>Found <strong>${matches.length}</strong> matching image${matches.length > 1 ? 's' : ''} containing this person via ArcFace facial recognition (threshold &ge; ${data.min_similarity || 0.48}).</p>`;
+                    } else {
+                        currentTextContainer.innerHTML = `<p>Found <strong>${matches.length}</strong> visually similar image${matches.length > 1 ? 's' : ''} based on local VLM semantic understanding.</p>`;
+                    }
+                }
+            } else {
+                const noMatchDiv = document.createElement('div');
+                noMatchDiv.className = 'no-match-alert';
+                if (data.search_type === 'face_search') {
+                    noMatchDiv.innerHTML = `
+                        <div class="no-match-card">
+                            <i class="fa-solid fa-user-xmark no-match-icon"></i>
+                            <div class="no-match-content">
+                                <strong>No Matching Identity Found</strong>
+                                <p>No registered faces in the knowledge graph matched this person above the strict similarity cutoff (threshold &ge; ${data.min_similarity || 0.48}).</p>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    noMatchDiv.innerHTML = `
+                        <div class="no-match-card">
+                            <i class="fa-solid fa-image-slash no-match-icon"></i>
+                            <div class="no-match-content">
+                                <strong>No Visually Similar Images Found</strong>
+                                <p>No faces were detected, and no images in the graph matched the visual description generated by Ollama.</p>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                if (currentMediaContainer) {
+                    currentMediaContainer.appendChild(noMatchDiv);
+                } else if (currentAssistantBubble) {
+                    currentAssistantBubble.appendChild(noMatchDiv);
+                }
+            }
+            resetTurnState();
+            disableInput(false);
+        }
+    } catch (err) {
+        console.error('Reverse image search error:', err);
+        if (currentStatusLog) {
+            currentStatusLog.remove();
+            currentStatusLog = null;
+        }
+        if (currentAssistantBubble) {
+            const typingInd = currentAssistantBubble.querySelector('.typing-indicator');
+            if (typingInd) typingInd.remove();
+            currentAssistantBubble.innerHTML += `<div class="error-msg" style="color: var(--danger);"><i class="fa-solid fa-circle-exclamation"></i> Error: ${escapeHtml(err.message)}</div>`;
+        }
+        resetTurnState();
+        disableInput(false);
+    }
+}
+
+function renderReverseImageUserMessage(filename, src) {
+    if (welcomeMessage) {
+        welcomeMessage.style.display = 'none';
+    }
+    if (sourcesContainer) {
+        sourcesContainer.style.display = 'none';
+    }
+    if (sourcesList) {
+        sourcesList.innerHTML = '';
+    }
+
+    const msgElement = document.createElement('div');
+    msgElement.className = 'message user';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble reverse-search-user-bubble';
+    bubble.innerHTML = `
+        <div class="user-query-text">
+            <i class="fa-solid fa-camera"></i> Reverse Image Search: <strong>${escapeHtml(filename)}</strong>
+        </div>
+        ${src ? `<div class="user-query-img-preview"><img src="${src}" alt="Query Image"></div>` : ''}
+    `;
+
+    msgElement.appendChild(avatar);
+    msgElement.appendChild(bubble);
+    chatMessages.appendChild(msgElement);
+    scrollToBottom();
+}
+
+function renderReverseChoiceUserMessage(choiceLabel) {
+    if (welcomeMessage) {
+        welcomeMessage.style.display = 'none';
+    }
+    const msgElement = document.createElement('div');
+    msgElement.className = 'message user';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.innerHTML = '<i class="fa-solid fa-user"></i>';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble';
+    bubble.innerHTML = `<i class="fa-solid fa-user-tag"></i> Focused Search: <strong>${escapeHtml(choiceLabel)}</strong>`;
+
+    msgElement.appendChild(avatar);
+    msgElement.appendChild(bubble);
+    chatMessages.appendChild(msgElement);
+    scrollToBottom();
+}
+
+function renderMultiFaceSelectorBubble(data) {
+    const bubbleContent = document.createElement('div');
+    bubbleContent.className = 'multi-face-bubble-container';
+    bubbleContent.innerHTML = `
+        <div class="multi-face-bubble-header">
+            <i class="fa-solid fa-users-viewfinder"></i>
+            <span><strong>${data.faces_detected} Faces Detected</strong> in this image</span>
+        </div>
+        <p class="multi-face-bubble-desc">Select which person you would like to search for, or choose to search across all detected faces:</p>
+        <div class="face-chips-grid"></div>
+        <div class="multi-face-bubble-actions">
+            <button type="button" class="btn-bubble-search-all">
+                <i class="fa-solid fa-people-arrows"></i> Search All Faces
+            </button>
+        </div>
+    `;
+
+    const chipsGrid = bubbleContent.querySelector('.face-chips-grid');
+    data.faces.forEach((f) => {
+        const chip = document.createElement('div');
+        chip.className = 'face-chip';
+        chip.title = `Search for Face #${f.face_index + 1} (${(f.det_score * 100).toFixed(0)}% confidence)`;
+        chip.innerHTML = `
+            <div class="face-chip-avatar">
+                <img src="${f.crop_base64}" alt="Face #${f.face_index + 1}">
+            </div>
+            <div class="face-chip-info">
+                <strong>Face #${f.face_index + 1}</strong>
+                <span>${(f.det_score * 100).toFixed(0)}% Conf</span>
+            </div>
+        `;
+        chip.addEventListener('click', () => {
+            const facePickerModal = document.getElementById('face-picker-modal');
+            if (facePickerModal) facePickerModal.style.display = 'none';
+            handleReverseImageSearch(null, data.temp_image_id, f.face_index);
+        });
+        chipsGrid.appendChild(chip);
+    });
+
+    const searchAllBtn = bubbleContent.querySelector('.btn-bubble-search-all');
+    searchAllBtn.addEventListener('click', () => {
+        const facePickerModal = document.getElementById('face-picker-modal');
+        if (facePickerModal) facePickerModal.style.display = 'none';
+        handleReverseImageSearch(null, data.temp_image_id, -1);
+    });
+
+    if (currentMediaContainer) {
+        currentMediaContainer.appendChild(bubbleContent);
+    } else if (currentAssistantBubble) {
+        currentAssistantBubble.appendChild(bubbleContent);
+    }
+    scrollToBottom();
+}
+
+function openMultiFacePickerModal(data) {
+    const modal = document.getElementById('face-picker-modal');
+    const container = document.getElementById('face-chips-container');
+    const heading = document.getElementById('face-picker-heading');
+    if (!modal || !container) return;
+
+    heading.textContent = `${data.faces_detected} Faces Detected`;
+    container.innerHTML = '';
+
+    data.faces.forEach((f) => {
+        const chip = document.createElement('div');
+        chip.className = 'face-chip';
+        chip.innerHTML = `
+            <div class="face-chip-avatar">
+                <img src="${f.crop_base64}" alt="Face #${f.face_index + 1}">
+            </div>
+            <div class="face-chip-info">
+                <strong>Face #${f.face_index + 1}</strong>
+                <span>${(f.det_score * 100).toFixed(0)}% Conf</span>
+            </div>
+        `;
+        chip.addEventListener('click', () => {
+            modal.style.display = 'none';
+            handleReverseImageSearch(null, data.temp_image_id, f.face_index);
+        });
+        container.appendChild(chip);
+    });
+
+    modal.style.display = 'flex';
 }

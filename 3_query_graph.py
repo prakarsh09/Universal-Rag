@@ -4,6 +4,7 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 import sys
 import re
 import traceback
+from typing import List, Dict, Any, Optional
 
 # Ensure UTF-8 output on Windows console
 if hasattr(sys.stdout, 'reconfigure'):
@@ -525,3 +526,78 @@ def classify_search_intent(query: str, llm=None) -> str:
             pass
 
     return "image" if has_image_kw else "document"
+
+
+class Neo4jFaceRetriever:
+    """Retrieves images by face ArcFace 512d vector cosine similarity."""
+    def __init__(self, driver, top_k: int = 6, min_similarity: float = 0.48):
+        self._driver = driver
+        self._top_k = top_k
+        self._min_similarity = min_similarity
+
+    def retrieve(self, face_embedding: List[float], min_similarity: Optional[float] = None, top_k: Optional[int] = None) -> List[Dict[str, Any]]:
+        if not self._driver or not face_embedding:
+            return []
+
+        sim_cutoff = min_similarity if min_similarity is not None else self._min_similarity
+        limit = top_k if top_k is not None else self._top_k
+
+        results = []
+        with self._driver.session() as session:
+            try:
+                query = """
+                CALL db.index.vector.queryNodes('face_vector_index', $limit, $embedding)
+                YIELD node AS f, score
+                WHERE score >= $sim_cutoff
+                MATCH (i:Image)-[:HAS_FACE]->(f)
+                RETURN i.id AS id, i.filename AS filename, i.image_url AS image_url,
+                       i.summary AS summary, i.category AS category,
+                       i.point1 AS point1, i.point2 AS point2, i.point3 AS point3,
+                       f.id AS face_id, f.bbox AS bbox, f.crop_url AS crop_url,
+                       score AS similarity_score
+                ORDER BY score DESC
+                """
+                records = session.run(query, {
+                    "limit": limit * 2,
+                    "embedding": face_embedding,
+                    "sim_cutoff": sim_cutoff
+                })
+                seen_images = set()
+                for rec in records:
+                    fn = rec["filename"]
+                    if fn in seen_images:
+                        continue
+                    seen_images.add(fn)
+                    results.append({
+                        "id": rec["id"] or "",
+                        "filename": fn,
+                        "image_url": rec["image_url"] or f"/images/{rec['category']}/{fn}",
+                        "summary": rec["summary"] or "",
+                        "category": rec["category"] or "General",
+                        "point1": rec["point1"] or "",
+                        "point2": rec["point2"] or "",
+                        "point3": rec["point3"] or "",
+                        "face_id": rec["face_id"] or "",
+                        "matched_face_bbox": rec["bbox"] or [],
+                        "matched_face_crop": rec["crop_url"] or "",
+                        "similarity_score": round(float(rec["similarity_score"]), 4),
+                        "match_type": "face_match"
+                    })
+                    if len(results) >= limit:
+                        break
+            except Exception as e:
+                import logging
+                logging.getLogger("query_graph").warning(f"Error querying face_vector_index: {e}")
+        return results
+
+    def retrieve_multi(self, face_embeddings: List[List[float]], min_similarity: Optional[float] = None, top_k: Optional[int] = None) -> List[Dict[str, Any]]:
+        all_matches = {}
+        for emb in face_embeddings:
+            for item in self.retrieve(emb, min_similarity=min_similarity, top_k=top_k):
+                fn = item["filename"]
+                if fn not in all_matches or item["similarity_score"] > all_matches[fn]["similarity_score"]:
+                    all_matches[fn] = item
+        sorted_items = sorted(all_matches.values(), key=lambda x: x["similarity_score"], reverse=True)
+        limit = top_k if top_k is not None else self._top_k
+        return sorted_items[:limit]
+
